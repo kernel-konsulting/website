@@ -28,7 +28,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         //Content
         $mail->isHTML(false);
-        $mail->Subject = 'Contact Form Submission';
+        $mail->Subject = "Contact Form from $name";
         $mail->Body    = "Name: $name\nEmail: $email\nMessage:\n$message";
 
         $mail->send();

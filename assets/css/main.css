@@ -3300,3 +3300,44 @@ input, select, textarea {
 				}
 
 	}
+	body #header {
+		display: flex !important;
+		flex-direction: column !important;
+		align-items: center !important;
+		text-align: center !important;
+		padding: 200px !important;
+	}
+	
+	body #header .logo {
+		margin-bottom: 10px !important;
+	}
+	
+	body #header img {
+		max-width: 100% !important;
+		height: auto !important;
+	}
+	
+	body #header h1 {
+		margin: 10px 0 !important;
+		font-size: 2.5rem !important;
+	}
+	
+	body #header p {
+		font-size: 1.2rem !important;
+		margin-top: 5px !important;
+	}
+
+	.feature {
+		flex: 1;
+		padding: 20px;
+		margin-bottom: 20px;
+	}
+	
+	.feature .image img {
+		max-width: 100%;
+		height: auto;
+	}
+	
+	.feature .content {
+		padding: 10px;
+	}
