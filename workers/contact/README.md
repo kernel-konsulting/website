@@ -25,61 +25,70 @@ Resend without touching anything else.
 
 ## Setup
 
-Everything below happens once. Nothing is committed that is secret.
+Everything below happens once. Nothing secret is ever committed or printed.
 
-### 1. Turnstile
+### The fast path
 
-1. Cloudflare dashboard → **Turnstile** → **Add widget**, hostname
-   `kernelkonsulting.com` (add `kernel-konsulting.github.io` too while testing).
-2. Put the **site key** into `index.html`, on the `.cf-turnstile` div. The site
-   key is public.
-3. Store the **secret key**:
-
-   ```bash
-   cd workers/contact
-   npx wrangler secret put TURNSTILE_SECRET_KEY
-   ```
-
-Until you do step 3 the Worker runs on Cloudflare's published always-pass test
-key, which is set in `wrangler.jsonc` and **must not** be left in place for a
-live site.
-
-### 2. A sending domain
-
-Cloudflare dashboard → **Compute → Email Service → Email Sending → Onboard
-Domain**, and pick **`send.kernelkonsulting.com`**.
-
-Onboarding a subdomain means every record Cloudflare adds — the `cf-bounce` MX,
-the SPF and DKIM TXT records, and the `_dmarc` policy — lands under that
-subdomain. **Nothing on the apex changes**, which matters here because the apex
-MX points at Proton Mail and its SPF authorises Proton's senders.
-
-> If you onboard the apex instead, Cloudflare also writes
-> `_dmarc.kernelkonsulting.com`. You already have one there
-> (`v=DMARC1; p=quarantine`), so expect a conflict to resolve. The subdomain
-> avoids the question entirely.
-
-Sending to *verified destination addresses* is free on every plan, including the
-Workers free plan; that is the only kind of send this Worker does. Sending to
-arbitrary recipients would need Workers Paid.
-
-### 3. A verified destination
-
-Cloudflare dashboard → **Email Service → Email Routing → Destination
-Addresses**, add `contact@kernelkonsulting.com`. Cloudflare mails a verification
-link to that mailbox (it arrives at Proton); click it.
-
-### 4. Ship it
+The whole Cloudflare side is scripted. It is a dry run until you pass `--apply`,
+and every step is idempotent, so re-running it is safe.
 
 ```bash
 cd workers/contact
-npm install
-npm test          # 31 checks, no deployment needed
-npm run deploy    # creates api.kernelkonsulting.com + its certificate
+./scripts/cloudflare-setup.sh              # print the plan, change nothing
+export CLOUDFLARE_API_TOKEN=...            # never commit this
+./scripts/cloudflare-setup.sh --apply --email
 ```
 
-`wrangler deploy` reads `routes` in `wrangler.jsonc` and creates the custom
-domain, so there is no DNS record to add by hand for the endpoint.
+That does the nine DNS records, creates the Turnstile widget, writes the site
+key into `index.html`, stores the secret, and deploys the Worker. It never
+touches Email Routing on the apex, so Proton's MX, SPF and DMARC are untouched.
+
+The token needs **Zone > DNS > Edit**, **Account > Turnstile Sites > Edit**,
+**Account > Workers Scripts > Edit**, **Zone > Zone > Read**, and for `--email`
+also **Account > Email Routing > Edit**.
+
+`./scripts/test-setup-script.sh` runs the whole apply path against a stub API —
+28 checks covering the record payloads, the idempotency, and that the secret
+never reaches stdout or the log. Use it if you change the script.
+
+Afterwards: `./scripts/check-deployment.sh` verifies the live result — DNS, that
+the mail records have *not* moved, what Pages is actually serving, and whether
+the Worker answers. It needs no credentials.
+
+### By hand, if you prefer
+
+1. **Turnstile.** Cloudflare dashboard → **Turnstile** → **Add widget**,
+   hostname `kernelkonsulting.com` (add `kernel-konsulting.github.io` too while
+   testing). Put the **site key** into `index.html` on the `.cf-turnstile` div —
+   it is public. Store the **secret key**:
+
+   ```bash
+   npx wrangler secret put TURNSTILE_SECRET_KEY
+   ```
+
+   Until you do that the Worker runs on Cloudflare's published always-pass test
+   key, which is set in `wrangler.jsonc` and **must not** be left in place for a
+   live site. It logs a warning on every request while it is.
+
+2. **A sending domain.** **Compute → Email Service → Email Sending → Onboard
+   Domain**, and pick **`send.kernelkonsulting.com`**. Onboarding a subdomain
+   means every record Cloudflare adds — the `cf-bounce` MX, the SPF and DKIM TXT
+   records, and the `_dmarc` policy — lands under that subdomain, and **nothing
+   on the apex changes**.
+
+   > Onboarding the apex instead also writes `_dmarc.kernelkonsulting.com`. You
+   > already have one there (`v=DMARC1; p=quarantine`), so expect a conflict to
+   > resolve. The subdomain avoids the question entirely.
+
+   Sending to *verified destination addresses* is free on every plan, including
+   Workers Free; that is the only kind of send this Worker does.
+
+3. **A verified destination.** **Email Service → Email Routing → Destination
+   Addresses**, add `contact@kernelkonsulting.com`, and click the verification
+   link that arrives at Proton.
+
+4. **Deploy.** `npm run deploy` — `wrangler` reads `routes` in `wrangler.jsonc`
+   and creates `api.kernelkonsulting.com` and its certificate itself.
 
 ## Verifying it end-to-end
 

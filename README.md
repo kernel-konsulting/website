@@ -77,14 +77,24 @@ The form posts to a Cloudflare Worker at
 `workers/contact/`. GitHub Pages cannot run PHP, which is the whole reason the
 Worker exists.
 
-`workers/contact/README.md` has the setup and the deploy commands. In short:
+`workers/contact/README.md` has the full setup. The short version:
 
-1. Create a Turnstile widget; site key into `index.html`, secret into the Worker
-   with `wrangler secret put`.
-2. Onboard `send.kernelkonsulting.com` for Cloudflare Email Sending — a
-   subdomain, so the apex records Proton depends on are untouched.
-3. Add `contact@kernelkonsulting.com` as a verified destination address.
-4. `npm run deploy`.
+```bash
+cd workers/contact
+./scripts/cloudflare-setup.sh                    # dry run: prints the plan
+export CLOUDFLARE_API_TOKEN=...                  # never commit this
+./scripts/cloudflare-setup.sh --apply --email    # does the whole Cloudflare side
+./scripts/check-deployment.sh                    # read-only verification
+```
+
+The setup script creates the nine DNS records, the Turnstile widget, the site
+key in `index.html`, the Worker secret and the deploy. It never enables Email
+Routing on the apex, so the MX, SPF and DMARC records Proton depends on are not
+modified.
+
+One step is still manual: onboarding `send.kernelkonsulting.com` for Cloudflare
+Email Sending, which is a dashboard flow with no stable public API, and clicking
+the destination-address verification link that arrives at Proton.
 
 Spam protection is layered and every layer is free:
 
