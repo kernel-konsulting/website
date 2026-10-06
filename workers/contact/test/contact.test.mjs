@@ -367,6 +367,27 @@ test('turnstile: the always-pass test pair is accepted', async (t) => {
   assert.equal(result.email.sent.length, 1);
 });
 
+test('turnstile: warns loudly when it is still on the test secret', async () => {
+  const originalLog = console.log;
+  const lines = [];
+  console.log = (...args) => lines.push(args.join(' '));
+  try {
+    await run(post(formBody()), {
+      env: {
+        TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',
+        TURNSTILE_ACTION: '',
+      },
+    });
+  } finally {
+    console.log = originalLog;
+  }
+  assert.equal(
+    lines.some((line) => line.includes('Turnstile TEST secret')),
+    true,
+    `expected a test-secret warning, got: ${JSON.stringify(lines)}`,
+  );
+});
+
 test('turnstile: a response from the wrong hostname is rejected', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>

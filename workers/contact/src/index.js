@@ -153,6 +153,11 @@ function countLinks(value) {
   return matches ? matches.length : 0;
 }
 
+/** Cloudflare's published always-pass test key. Never valid in production. */
+function isTurnstileTestSecret(secret) {
+  return secret.startsWith('1x0000000000000000000000000000000');
+}
+
 /** Turnstile validation. Returns { ok, codes }. */
 async function verifyTurnstile(secret, token, ip, allowedHostnames, expectedAction) {
   if (token === '' || token.length > 2048) {
@@ -336,6 +341,11 @@ export async function handleRequest(request, env) {
   // --- 7. CAPTCHA ----------------------------------------------------------
   const turnstileSecret = env.TURNSTILE_SECRET_KEY || '';
   if (turnstileSecret) {
+    if (isTurnstileTestSecret(turnstileSecret)) {
+      // Loud on purpose: the test key passes everything, so a production
+      // deploy that still carries it has no CAPTCHA at all.
+      console.log('[contact] WARNING: running on a Turnstile TEST secret — no real challenge is being solved');
+    }
     const allowedHostnames = parseList(env.TURNSTILE_HOSTNAMES, []);
     const result = await verifyTurnstile(
       turnstileSecret,
