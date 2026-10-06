@@ -1,6 +1,4 @@
 User-agent: *
 Allow: /
-Disallow: /contact.php
-Disallow: /includes/
 
 Sitemap: https://kernelkonsulting.com/sitemap.xml

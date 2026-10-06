@@ -1,0 +1,16 @@
+{
+  "name": "kk-contact",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Contact form endpoint for kernelkonsulting.com (Cloudflare Worker)",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.40.0"
+  }
+}

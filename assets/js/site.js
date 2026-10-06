@@ -70,6 +70,14 @@
     });
   }
 
+  function resetTurnstile() {
+    // Turnstile tokens are single-use, so a spent one has to be replaced
+    // before the same visitor can send a second message.
+    if (window.turnstile && typeof window.turnstile.reset === 'function') {
+      try { window.turnstile.reset(); } catch (error) { /* widget not ready yet */ }
+    }
+  }
+
   form.addEventListener('submit', function (event) {
     if (!window.fetch || !window.FormData) { return; } // let the browser post normally
 
@@ -114,12 +122,15 @@
           form.reset();
           if (js) { js.value = '1'; }
           if (ts) { ts.value = String(Math.floor(Date.now() / 1000)); }
+          resetTurnstile();
           setStatus(result.data.message || 'Thanks — your message was sent.', 'ok');
         } else {
+          resetTurnstile();
           setStatus(result.data.message || 'Sorry, something went wrong.', 'error');
         }
       })
       .catch(function () {
+        resetTurnstile();
         setStatus('We could not reach the server. Please email contact@kernelkonsulting.com.', 'error');
       })
       .finally(function () {

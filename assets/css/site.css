@@ -439,6 +439,11 @@ p { text-wrap: pretty; }
   overflow: hidden;
 }
 
+/* Turnstile sits between the fields and the submit row. It renders inside an
+   iframe of its own, so only the spacing is ours to set. */
+.cf-turnstile { margin-top: .2rem; }
+.cf-turnstile iframe { max-width: 100%; }
+
 .form__foot {
   display: flex;
   flex-wrap: wrap;

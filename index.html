@@ -227,7 +227,7 @@
         </p>
       </header>
 
-      <form class="form" id="contact-form" action="/contact.php" method="post" novalidate>
+      <form class="form" id="contact-form" action="https://api.kernelkonsulting.com/contact" method="post" novalidate>
         <div class="form__row">
           <div class="field">
             <label for="f-name">Name <span class="req" aria-hidden="true">*</span></label>
@@ -251,6 +251,15 @@
         </div>
         <input type="hidden" name="ts" value="">
         <input type="hidden" name="js" value="">
+
+        <!-- Cloudflare Turnstile. The site key is public. Replace this test key
+             with the one from Cloudflare dashboard > Turnstile; the matching
+             secret lives in the Worker as TURNSTILE_SECRET_KEY. -->
+        <div class="cf-turnstile"
+             data-sitekey="1x00000000000000000000AA"
+             data-action="contact"
+             data-theme="light"
+             data-size="flexible"></div>
 
         <div class="form__foot">
           <button class="btn btn--primary" type="submit">Send message</button>
@@ -305,6 +314,7 @@
 </footer>
 
 <script src="/assets/js/site.js" defer></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-JCZYRKV01Z"></script>
