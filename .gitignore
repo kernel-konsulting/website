@@ -1,0 +1,7 @@
+# never commit credentials
+contact-config.php
+
+# build artefacts / editor noise
+*.log
+.DS_Store
+Thumbs.db
