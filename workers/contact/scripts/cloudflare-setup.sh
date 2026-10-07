@@ -98,6 +98,19 @@ for bin in curl python3; do
 done
 [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || die "CLOUDFLARE_API_TOKEN is not set"
 
+# A `vars` entry and a `wrangler secret` cannot coexist: on every deploy the var
+# silently overwrites the stored secret, which turns the CAPTCHA off without
+# saying so. Refuse rather than let that happen.
+if [ -f "${WORKER_DIR}/wrangler.jsonc" ] && python3 -c '
+import re, sys
+source = open(sys.argv[1]).read()
+sys.exit(0 if re.search(r"\"TURNSTILE_SECRET_KEY\"\s*:", source) else 1)
+' "${WORKER_DIR}/wrangler.jsonc"; then
+  die "wrangler.jsonc sets TURNSTILE_SECRET_KEY in vars. That overwrites the real
+  secret on every deploy and silently disables the CAPTCHA. Delete it from vars
+  and keep only the \`wrangler secret\`."
+fi
+
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 RESP="${TMP}/response.json"
@@ -240,12 +253,14 @@ SITEKEY="$(jfind name "$WIDGET_NAME" sitekey)"
 
 if [ -n "$SITEKEY" ]; then
   skip "widget \"${WIDGET_NAME}\" already exists -> ${SITEKEY}"
-  # The API never replays an existing secret, so it has to be rotated to be read.
-  cf_ok POST "/accounts/${ACCOUNT_ID}/challenges/widgets/${SITEKEY}/rotate_secret" \
-    '{"invalidate_immediately":false}'
+  # A GET returns the widget's secret, so there is no need to rotate it. An
+  # earlier version of this script rotated to read the secret, which fails with
+  # 10406 "a secret rotation is already in progress" if run twice in quick
+  # succession, and needlessly invalidates the previous secret.
+  cf_ok GET "/accounts/${ACCOUNT_ID}/challenges/widgets/${SITEKEY}"
   TURNSTILE_SECRET="$(jget 'result.secret')"
-  [ -n "$TURNSTILE_SECRET" ] || die "could not rotate the widget secret"
-  note "rotated the widget secret; the previous one stays valid for 2 hours"
+  [ -n "$TURNSTILE_SECRET" ] || die "the widgets API did not return a secret; rotate it in the dashboard"
+  ok "read the existing widget secret (not rotated)"
 else
   cf_ok POST "/accounts/${ACCOUNT_ID}/challenges/widgets" \
     "$(python3 -c '

@@ -10,12 +10,32 @@
  * published dummy keys, so they are skipped automatically when offline.
  */
 
-import { test } from 'node:test';
+import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { handleRequest } from '../src/index.js';
 
 /* --------------------------------------------------------------- test env */
+
+const REAL_FETCH = globalThis.fetch;
+
+/** Answer for siteverify so the captcha path runs without hitting the network. */
+function stubSiteverify(payload = {
+  success: true,
+  hostname: 'kernelkonsulting.com',
+  action: 'contact',
+}) {
+  globalThis.fetch = async () => new Response(JSON.stringify(payload), { status: 200 });
+}
+
+beforeEach(() => {
+  globalThis.fetch = REAL_FETCH;
+  stubSiteverify();
+});
+
+afterEach(() => {
+  globalThis.fetch = REAL_FETCH;
+});
 
 const BASE_ENV = {
   ALLOWED_ORIGINS: 'https://kernelkonsulting.com,https://www.kernelkonsulting.com',
@@ -24,7 +44,7 @@ const BASE_ENV = {
   MAIL_FROM: 'website@kernelkonsulting.com',
   TURNSTILE_ACTION: 'contact',
   TURNSTILE_HOSTNAMES: '',
-  TURNSTILE_SECRET_KEY: '',
+  TURNSTILE_SECRET_KEY: 'stub-secret',
 };
 
 const ALLOWED_ORIGIN = 'https://kernelkonsulting.com';
@@ -52,6 +72,9 @@ function formBody(overrides = {}) {
     website: '',
     js: '1',
     ts: String(Math.floor(Date.now() / 1000) - 10),
+    // A token, because the captcha is enforced on every submission. The
+    // siteverify stub accepts it; tests for the token itself override this.
+    'cf-turnstile-response': 'valid-token',
     ...overrides,
   };
   const form = new FormData();
@@ -285,6 +308,12 @@ test('delivery falls back to Resend when RESEND_API_KEY is set', async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, init) => {
+    if (String(url).includes('siteverify')) {
+      return new Response(
+        JSON.stringify({ success: true, hostname: 'kernelkonsulting.com', action: 'contact' }),
+        { status: 200 },
+      );
+    }
     calls.push({ url: String(url), body: JSON.parse(init.body) });
     return new Response(JSON.stringify({ id: 'resend-1' }), { status: 200 });
   };
@@ -307,17 +336,30 @@ test('delivery falls back to Resend when RESEND_API_KEY is set', async () => {
 
 /* ------------------------------------------------------------------ captcha */
 
-test('turnstile: a missing token is rejected when the secret is configured', async () => {
+test('turnstile: refuses to run at all when no secret is configured', async () => {
+  // Fail closed: a missing secret must not silently mean "no CAPTCHA".
   const { response, payload, email } = await run(post(formBody()), {
-    env: { TURNSTILE_SECRET_KEY: '2x0000000000000000000000000000000AA' },
+    env: { TURNSTILE_SECRET_KEY: '' },
   });
+  assert.equal(response.status, 503);
+  assert.equal(payload.ok, false);
+  assert.match(payload.message, /temporarily unavailable/i);
+  assert.match(payload.message, /contact@kernelkonsulting\.com/);
+  assert.equal(email.sent.length, 0);
+});
+
+test('turnstile: a missing token is rejected when the secret is configured', async () => {
+  const { response, payload, email } = await run(
+    post(formBody({ 'cf-turnstile-response': '' })),
+    { env: { TURNSTILE_SECRET_KEY: '2x0000000000000000000000000000000AA' } },
+  );
   assert.equal(response.status, 403);
   assert.match(payload.message, /verify that you are human/i);
   assert.equal(email.sent.length, 0);
 });
 
 test('turnstile: a forged token is rejected', async () => {
-  // Always-fail secret from Cloudflare's documented test keys.
+  globalThis.fetch = REAL_FETCH; // the always-fail key is a real API call
   const { response, email } = await run(
     post(formBody({ 'cf-turnstile-response': 'XXXX.DUMMY.TOKEN.XXXX' })),
     { env: { TURNSTILE_SECRET_KEY: '2x0000000000000000000000000000000AA' } },
@@ -348,6 +390,7 @@ test('turnstile: the always-pass test pair is accepted', async (t) => {
   // Always-pass secret from Cloudflare's documented test keys. Needs network.
   // Test keys do not echo an `action`, so the action check is disabled here;
   // enforcement of it is covered by the two tests above.
+  globalThis.fetch = REAL_FETCH; // the always-pass key is a real API call
   let result;
   try {
     result = await run(

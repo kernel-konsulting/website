@@ -3,7 +3,12 @@
   "name": "kk-contact",
   "main": "src/index.js",
   "compatibility_date": "2026-10-06",
-  "workers_dev": true,
+
+  // Must be false. With it true (or absent) wrangler tries to publish to
+  // <account>.workers.dev, and an account that has never registered a
+  // workers.dev subdomain fails the deploy outright — without ever reaching
+  // the custom domain route below.
+  "workers_dev": false,
 
   // Custom domain. Wrangler creates the DNS record and certificate on deploy.
   // Comment this out to deploy to the *.workers.dev URL only while testing.
@@ -22,18 +27,18 @@
     // website@kernelkonsulting.com in that case.
     "MAIL_FROM": "website@send.kernelkonsulting.com",
     "TURNSTILE_HOSTNAMES": "kernelkonsulting.com,www.kernelkonsulting.com,kernel-konsulting.github.io",
-    "TURNSTILE_ACTION": "contact",
+    "TURNSTILE_ACTION": "contact"
 
-    // ------------------------------------------------------------------
-    // Cloudflare's published ALWAYS-PASS test secret. It makes the Worker
-    // runnable before you have a real widget, and it must be replaced
-    // before the site goes live:
+    // TURNSTILE_SECRET_KEY is deliberately NOT here.
+    //
+    // A `vars` entry and a `wrangler secret` cannot coexist: on every deploy
+    // the var overwrites the stored secret, silently disabling the CAPTCHA.
+    // Set it once, and only once, with:
     //
     //   npx wrangler secret put TURNSTILE_SECRET_KEY
     //
-    // That write removes this var and stores the real value encrypted.
-    // ------------------------------------------------------------------
-    "TURNSTILE_SECRET_KEY": "1x0000000000000000000000000000000AA"
+    // The Worker logs a warning on every request while it is running on
+    // Cloudflare's always-pass test key.
   },
 
   // Cloudflare Email Sending. Sends are free to verified destination

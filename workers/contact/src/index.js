@@ -340,25 +340,33 @@ export async function handleRequest(request, env) {
 
   // --- 7. CAPTCHA ----------------------------------------------------------
   const turnstileSecret = env.TURNSTILE_SECRET_KEY || '';
-  if (turnstileSecret) {
-    if (isTurnstileTestSecret(turnstileSecret)) {
-      // Loud on purpose: the test key passes everything, so a production
-      // deploy that still carries it has no CAPTCHA at all.
-      console.log('[contact] WARNING: running on a Turnstile TEST secret — no real challenge is being solved');
-    }
-    const allowedHostnames = parseList(env.TURNSTILE_HOSTNAMES, []);
-    const result = await verifyTurnstile(
-      turnstileSecret,
-      field('cf-turnstile-response'),
-      clientIp(request),
-      allowedHostnames,
-      env.TURNSTILE_ACTION ?? 'contact',
-    );
-    if (!result.ok) {
-      console.log(`[contact] turnstile rejected: ${result.codes.join(',')}`);
-      return finish(403, false, 'Verification failed',
-        'We could not verify that you are human. Please reload and try again.');
-    }
+
+  if (turnstileSecret === '') {
+    // Fail closed. Silently accepting submissions without a CAPTCHA is the
+    // worst outcome here: the form looks fine and quietly fills with spam.
+    console.log('[contact] refused: TURNSTILE_SECRET_KEY is not configured');
+    return finish(503, false, 'Form unavailable',
+      `This form is temporarily unavailable. Please email us directly at ${CONTACT_EMAIL}`);
+  }
+
+  if (isTurnstileTestSecret(turnstileSecret)) {
+    // Loud on purpose: the test key passes everything, so a production deploy
+    // that still carries it has no CAPTCHA at all.
+    console.log('[contact] WARNING: running on a Turnstile TEST secret — no real challenge is being solved');
+  }
+
+  const allowedHostnames = parseList(env.TURNSTILE_HOSTNAMES, []);
+  const result = await verifyTurnstile(
+    turnstileSecret,
+    field('cf-turnstile-response'),
+    clientIp(request),
+    allowedHostnames,
+    env.TURNSTILE_ACTION ?? 'contact',
+  );
+  if (!result.ok) {
+    console.log(`[contact] turnstile rejected: ${result.codes.join(',')}`);
+    return finish(403, false, 'Verification failed',
+      'We could not verify that you are human. Please reload and try again.');
   }
 
   // --- send ----------------------------------------------------------------

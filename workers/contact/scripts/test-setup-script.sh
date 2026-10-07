@@ -78,6 +78,11 @@ elif path.startswith("/zones/zone123/dns_records") and method == "POST":
         reply({"success": True, "result": payload})
 elif path == "/accounts/acct123/challenges/widgets" and method == "GET":
     reply({"success": True, "result": db["widgets"]})
+elif path.startswith("/accounts/acct123/challenges/widgets/") and method == "GET":
+    sitekey = path.rsplit("/", 1)[-1]
+    widget = next((w for w in db["widgets"] if w["sitekey"] == sitekey), None)
+    reply({"success": True, "result": widget} if widget
+          else {"success": False, "errors": [{"code": 10000, "message": "no such widget"}]}, 200 if widget else 404)
 elif path == "/accounts/acct123/challenges/widgets" and method == "POST":
     payload = json.loads(body)
     widget = {"name": payload["name"], "sitekey": "0x4AAAAAAA_test_sitekey",
@@ -236,8 +241,10 @@ check "still only one address registered" "$(posts /accounts/acct123/email/routi
 contains "reports the record already present" 'already present' <(printf '%s' "$second")
 contains "reports the widget already exists" 'already exists' <(printf '%s' "$second")
 contains "reports the address already present" 'already a destination' <(printf '%s' "$second")
-check "rotates rather than recreates the secret" \
-  "$(grep -c 'rotate_secret' "$STATE/calls.log" | tr -d ' ')" "1"
+check "never rotates the existing secret" \
+  "$(grep -c 'rotate_secret' "$STATE/calls.log" || true)" "0"
+pycheck "reads the existing widget's secret instead" \
+  "any(c['method'] == 'GET' and c['path'] == '/accounts/acct123/challenges/widgets/0x4AAAAAAA_test_sitekey' for c in calls)"
 
 printf '\n\033[1mGuard rails\033[0m\n'
 out="$(cd "${SANDBOX}/workers/contact" && ./scripts/cloudflare-setup.sh 2>&1)"
@@ -249,6 +256,16 @@ if out="$(cd "${SANDBOX}/workers/contact" && CLOUDFLARE_API_TOKEN= ./scripts/clo
 else
   contains "refuses to run without a token" 'CLOUDFLARE_API_TOKEN is not set' <(printf '%s' "$out")
 fi
+
+# A `vars` entry for the secret would silently overwrite it on every deploy.
+printf '{ "vars": { "TURNSTILE_SECRET_KEY": "1x00000000000000000000AA" } }\n' \
+  > "${SANDBOX}/workers/contact/wrangler.jsonc"
+if out="$(cd "${SANDBOX}/workers/contact" && ./scripts/cloudflare-setup.sh --apply 2>&1)"; then
+  printf '  \033[31mFAIL\033[0m  refuses when the secret is also in vars\n'; fail=$((fail + 1))
+else
+  contains "refuses when the secret is also in vars" 'silently disables the CAPTCHA' <(printf '%s' "$out")
+fi
+rm -f "${SANDBOX}/workers/contact/wrangler.jsonc"
 
 # A pre-existing conflicting record must stop the run rather than duplicate it.
 python3 - "$STATE/db.json" <<'PY'
