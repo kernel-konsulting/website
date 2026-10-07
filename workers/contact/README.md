@@ -19,9 +19,10 @@ Layers, cheapest first, same order as the PHP version it replaces:
 6. Field validation, length caps and a link-count heuristic
 7. **Cloudflare Turnstile**, verified server-side against `siteverify`
 
-Only then does it send. Delivery goes through Cloudflare Email Sending's
-`send_email` binding; setting a `RESEND_API_KEY` secret switches delivery to
-Resend without touching anything else.
+Only then does it send. Delivery goes through **Resend** (set a `RESEND_API_KEY`
+secret). The Worker also carries a Cloudflare Email Sending `send_email`
+binding and falls back to it when no Resend key is present — see "Why Resend"
+below for why the Cloudflare path is not the one in use.
 
 ## Setup
 
@@ -66,29 +67,41 @@ the Worker answers. It needs no credentials.
    npx wrangler secret put TURNSTILE_SECRET_KEY
    ```
 
-   Until you do that the Worker runs on Cloudflare's published always-pass test
-   key, which is set in `wrangler.jsonc` and **must not** be left in place for a
-   live site. It logs a warning on every request while it is.
+   Until you set a real secret the Worker **fails closed**: it logs and returns
+   a 503 telling the visitor to use the mail address. It never silently accepts
+   submissions without a CAPTCHA.
 
-2. **A sending domain.** **Compute → Email Service → Email Sending → Onboard
-   Domain**, and pick **`send.kernelkonsulting.com`**. Onboarding a subdomain
-   means every record Cloudflare adds — the `cf-bounce` MX, the SPF and DKIM TXT
-   records, and the `_dmarc` policy — lands under that subdomain, and **nothing
-   on the apex changes**.
+2. **A sending domain.** Sign up at resend.com, then **Domains → Add Domain** →
+   `send.kernelkonsulting.com`, add the DNS records it shows (all TXT, all on
+   the `send.` subdomain — nothing on the apex), and click **Verify**. Then
+   **API Keys → Create** and store the key:
 
-   > Onboarding the apex instead also writes `_dmarc.kernelkonsulting.com`. You
-   > already have one there (`v=DMARC1; p=quarantine`), so expect a conflict to
-   > resolve. The subdomain avoids the question entirely.
+   ```bash
+   npx wrangler secret put RESEND_API_KEY
+   ```
 
-   Sending to *verified destination addresses* is free on every plan, including
-   Workers Free; that is the only kind of send this Worker does.
+   The key may be created with **sending access only**; that is enough, and it
+   is the tighter option. A sending-only key cannot list domains, so to confirm
+   the domain verified, just send something.
 
-3. **A verified destination.** **Email Service → Email Routing → Destination
-   Addresses**, add `contact@kernelkonsulting.com`, and click the verification
-   link that arrives at Proton.
-
-4. **Deploy.** `npm run deploy` — `wrangler` reads `routes` in `wrangler.jsonc`
+3. **Deploy.** `npm run deploy` — `wrangler` reads `routes` in `wrangler.jsonc`
    and creates `api.kernelkonsulting.com` and its certificate itself.
+
+### Why Resend, not Cloudflare Email Sending
+
+Cloudflare's own delivery path is gated. **Email Sending** — the product that
+lets you onboard a sending domain — requires **Workers Paid**. On the free plan
+the `send_email` binding can only send to verified destination addresses, and
+*only from a routing domain*, meaning a domain with **Email Routing** enabled.
+Email Routing on the apex wants to take over the apex MX, which on this domain
+belongs to Proton Mail, and the Subdomains option only appears once the apex is
+onboarded. So the free Cloudflare path would mean migrating the domain's mail
+into Cloudflare to serve one contact form.
+
+Resend's free tier (3,000/month, 100/day) does the same job with TXT records on
+a subdomain and no change to the apex at all. The `deliver()` function in
+`src/index.js` keeps both paths, so switching to Cloudflare later — if the plan
+changes — is a one-line edit plus unsetting the secret.
 
 ## Verifying it end-to-end
 

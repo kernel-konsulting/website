@@ -20,11 +20,10 @@
     "ALLOWED_ORIGINS": "https://kernelkonsulting.com,https://www.kernelkonsulting.com,https://kernel-konsulting.github.io",
     "SITE_NAME": "kernelkonsulting.com",
     "MAIL_TO": "contact@kernelkonsulting.com",
-    // Must be an address on a domain onboarded for Cloudflare Email Sending.
-    // This assumes you onboarded the subdomain `send.kernelkonsulting.com`,
+    // Must be on a domain the delivery provider has verified. Delivery goes
+    // through Resend, so this is the subdomain verified there. It is a
+    // subdomain on purpose: everything Resend needs is TXT records on `send.`,
     // which leaves the apex MX/SPF/DMARC that Proton depends on untouched.
-    // Onboarding the apex instead works too — change this to
-    // website@kernelkonsulting.com in that case.
     "MAIL_FROM": "website@send.kernelkonsulting.com",
     "TURNSTILE_HOSTNAMES": "kernelkonsulting.com,www.kernelkonsulting.com,kernel-konsulting.github.io",
     "TURNSTILE_ACTION": "contact"
@@ -41,8 +40,14 @@
     // Cloudflare's always-pass test key.
   },
 
-  // Cloudflare Email Sending. Sends are free to verified destination
-  // addresses on any plan, which is the only thing this Worker does.
+  // Cloudflare Email Sending. KEYS are declared but unused: on the Workers
+  // free plan this product cannot onboard a sending domain, so it can only
+  // send to verified destination addresses *from a routing domain* — and
+  // enabling Email Routing would mean handing Cloudflare the apex MX that
+  // Proton currently owns. Delivery therefore goes through Resend instead, via
+  // the RESEND_API_KEY secret. `deliver()` in src/index.js prefers Resend when
+  // that secret is present and falls back to this binding otherwise, so the
+  // binding stays here and costs nothing.
   "send_email": [{ "name": "EMAIL", "remote": true }],
 
   // Per-IP burst limit. The platform only supports 10s or 60s windows, so this

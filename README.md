@@ -92,9 +92,11 @@ key in `index.html`, the Worker secret and the deploy. It never enables Email
 Routing on the apex, so the MX, SPF and DMARC records Proton depends on are not
 modified.
 
-One step is still manual: onboarding `send.kernelkonsulting.com` for Cloudflare
-Email Sending, which is a dashboard flow with no stable public API, and clicking
-the destination-address verification link that arrives at Proton.
+One step is still manual: the mail provider. Delivery goes through **Resend**
+(free tier), and a Cloudflare Workers free plan cannot do it natively — Email
+Sending needs Workers Paid, and the free alternative would mean handing
+Cloudflare the apex MX that Proton owns. `workers/contact/README.md` explains
+the whole trade-off.
 
 Spam protection is layered and every layer is free:
 
